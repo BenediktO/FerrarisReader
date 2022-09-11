@@ -145,6 +145,13 @@ void MeasureActive(SCPI_C commands, SCPI_P parameters, Stream& interface) {
   digitalWrite(ACTIVITY_LED_PIN, LOW);
 }
 
+void MeasureSNR(SCPI_C commands, SCPI_P parameters, Stream& interface) {
+  digitalWrite(ACTIVITY_LED_PIN, HIGH);
+  struct SensorData sensor = sensors[get_channel_number(parameters)];
+  interface.println(1 - (float) sensor.dark_value / sensor.active_value);
+  digitalWrite(ACTIVITY_LED_PIN, LOW);
+}
+
 void MeasureEffective(SCPI_C commands, SCPI_P parameters, Stream& interface) {
   digitalWrite(ACTIVITY_LED_PIN, HIGH);
   struct SensorData sensor = sensors[get_channel_number(parameters)];
@@ -291,6 +298,7 @@ void setup() {
   controller.RegisterCommand(F("MEASure:SENSor:DARK?"), &MeasureDark);
   controller.RegisterCommand(F("MEASure:SENSor:ACTIve?"), &MeasureActive);
   controller.RegisterCommand(F("MEASure:SENSor:EFFEctive?"), &MeasureEffective);
+  controller.RegisterCommand(F("MEASure:SENSor:SNR?"), &MeasureSNR);
   controller.RegisterCommand(F("MEASure:TICKs:PERiod?"), &MeasurePeriod);
   controller.RegisterCommand(F("MEASure:TICKs:LAST?"), &MeasureLastTick);
 

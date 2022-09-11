@@ -67,8 +67,8 @@ struct SensorData
   int low_counter;
   bool state;
   uint32_t ticks;
-  int last_tick;
-  int second_last_tick;
+  uint32_t last_tick;
+  uint32_t second_last_tick;
   uint16_t upper_threshold;
   uint16_t lower_threshold;
   uint16_t duration;
@@ -180,7 +180,7 @@ void MeasurePower(SCPI_C commands, SCPI_P parameters, Stream& interface) {
   if (sensor.ticks < 2)
     interface.println(F("Invalid"));
   else {
-    interface.println(KWH_PER_TURN * 3600 / (sensor.last_tick - sensor.second_last_tick), 4);
+    interface.println(KWH_PER_TURN * 3600000.0 / (sensor.last_tick - sensor.second_last_tick), 4);
   }
   digitalWrite(ACTIVITY_LED_PIN, LOW);
 }
@@ -191,7 +191,7 @@ void MeasurePeriod(SCPI_C commands, SCPI_P parameters, Stream& interface) {
   if (sensor.ticks < 2)
     interface.println(F("Invalid"));
   else {
-    interface.println(sensor.last_tick - sensor.second_last_tick);
+    interface.println((sensor.last_tick - sensor.second_last_tick) / 1000.0);
   }
   digitalWrite(ACTIVITY_LED_PIN, LOW);
 }
@@ -202,7 +202,7 @@ void MeasureLastTick(SCPI_C commands, SCPI_P parameters, Stream& interface) {
   if (sensor.ticks < 1)
     interface.println(F("Invalid"));
   else
-    interface.println((millis() / 1000) - sensor.last_tick);
+    interface.println((millis() - sensor.last_tick) / 1000.0);
   digitalWrite(ACTIVITY_LED_PIN, LOW);
 }
 
@@ -271,7 +271,7 @@ void GetFrequency(SCPI_C commands, SCPI_P parameters, Stream& interface) {
 void tick(struct SensorData * sensor_data) {
   sensor_data->ticks++;
   sensor_data->second_last_tick = sensor_data->last_tick;
-  sensor_data->last_tick = millis() / 1000;
+  sensor_data->last_tick = millis();
 }
 
 

@@ -280,18 +280,18 @@ void calculate_everything(struct SensorData * sensor_data) {
 
   if (difference > sensor_data->upper_threshold) {
     sensor_data->high_counter++;
-    if (sensor_data->high_counter > sensor_data->duration)
+    if (sensor_data->high_counter > sensor_data->duration) {
+      if (!sensor_data->state)
+          tick(sensor_data);
       sensor_data->state = true;
+    }
   }
   else {
     sensor_data->high_counter = 0;
     if (difference < sensor_data->lower_threshold) {
       sensor_data->low_counter++;
-      if (sensor_data->low_counter > sensor_data->duration) {
-        if (sensor_data->state)
-          tick(sensor_data);
+      if (sensor_data->low_counter > sensor_data->duration)
         sensor_data->state = false;
-      }
     }
     else {
       sensor_data->low_counter = 0;

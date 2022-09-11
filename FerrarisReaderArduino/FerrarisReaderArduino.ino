@@ -341,6 +341,15 @@ void setup() {
     pinMode(IR_SENSORS[i], INPUT);
 
 
+  // switch off LEDs
+  #ifdef LED_BUILTIN_TX
+    pinMode(LED_BUILTIN_TX, INPUT);
+  #endif
+  #ifdef LED_BUILTIN_RX
+    pinMode(LED_BUILTIN_RX, INPUT);
+  #endif
+
+
   #ifdef DEBUG
     delay(2000);
     controller.PrintDebugInfo();

@@ -21,7 +21,7 @@
 
 #include "Vrekrer_scpi_parser.h"
 
-//#define DEBUG
+#define DEBUG
 
 SCPI_Parser controller;
 
@@ -48,24 +48,28 @@ int IR_LEDS = 9;  // common pin
 unsigned long last_time;
 int counter = 0;
 
-uint16_t active_value[NUM_CHANNELS];
-uint16_t dark_value[NUM_CHANNELS];
 
-int high_counter[NUM_CHANNELS];
-int low_counter[NUM_CHANNELS];
-bool state[NUM_CHANNELS];
-unsigned long ticks[NUM_CHANNELS];
+struct SensorData
+{
+  uint16_t active_value;
+  uint16_t dark_value;
+  int high_counter;
+  int low_counter;
+  bool state;
+  uint32_t ticks;
+  int last_tick;
+  int second_last_tick;
+};
 
 
-int last_tick[NUM_CHANNELS];
-int second_last_tick[NUM_CHANNELS];
+struct SensorData sensors[NUM_CHANNELS];
 
 
 int get_channel_number(SCPI_P parameters) {
-  if (parameters.Size() == 0)
+  if (parameters.Size() < 1)
     return 0;
   int temp = String(parameters[0]).toInt();
-  if ((temp >= 0) && (temp < NUM_CHANNELS))
+  if ((0 <= temp) && (temp < NUM_CHANNELS))
     return temp;
   return 0;
 }
@@ -75,6 +79,18 @@ int get_channel_number(SCPI_P parameters) {
 //                           SCPI standard commands                           //
 ////////////////////////////////////////////////////////////////////////////////
 
+
+
+void reset(void) {
+  struct SensorData sensor;
+  for (int i=0; i<NUM_CHANNELS; i++) {
+    sensor = sensors[i];
+    sensor.ticks = 0;
+    sensor.high_counter = 0;
+    sensor.low_counter = 0;
+    sensor.state = true;
+  }
+}
 
 
 void Identify(SCPI_C commands, SCPI_P parameters, Stream& interface) {
@@ -87,105 +103,113 @@ void Identify(SCPI_C commands, SCPI_P parameters, Stream& interface) {
 // Resets the Controller Board
 void Reset(SCPI_C commands, SCPI_P parameters, Stream& interface) {
   digitalWrite(ACTIVITY_LED_PIN, HIGH);
-  for (int i=0; i<NUM_CHANNELS; i++) {
-    ticks[i] = 0;
-    high_counter[i] = 0;
-    low_counter[i] = 0;
-    state[i] = true;
-  }
+  reset();
   digitalWrite(ACTIVITY_LED_PIN, LOW);
 }
 
 void MeasureTicks(SCPI_C commands, SCPI_P parameters, Stream& interface) {
   digitalWrite(ACTIVITY_LED_PIN, HIGH);
-  interface.println(ticks[get_channel_number(parameters)]);
+  struct SensorData sensor = sensors[get_channel_number(parameters)];
+  interface.println(sensor.ticks);
+  digitalWrite(ACTIVITY_LED_PIN, LOW);
+}
+
+void SetTicks(SCPI_C commands, SCPI_P parameters, Stream& interface) {
+  digitalWrite(ACTIVITY_LED_PIN, HIGH);
+  if (parameters.Size() >= 2) {
+    struct SensorData * sensor = &sensors[get_channel_number(parameters)];
+    sensor->ticks = String(parameters[1]).toInt();
+  }
   digitalWrite(ACTIVITY_LED_PIN, LOW);
 }
 
 void MeasureDark(SCPI_C commands, SCPI_P parameters, Stream& interface) {
   digitalWrite(ACTIVITY_LED_PIN, HIGH);
-  interface.println(dark_value[get_channel_number(parameters)]);
+  struct SensorData sensor = sensors[get_channel_number(parameters)];
+  interface.println(sensor.dark_value);
   digitalWrite(ACTIVITY_LED_PIN, LOW);
 }
 
 void MeasureActive(SCPI_C commands, SCPI_P parameters, Stream& interface) {
   digitalWrite(ACTIVITY_LED_PIN, HIGH);
-  interface.println(active_value[get_channel_number(parameters)]);
+  struct SensorData sensor = sensors[get_channel_number(parameters)];
+  interface.println(sensor.active_value);
   digitalWrite(ACTIVITY_LED_PIN, LOW);
 }
 
 void MeasureEffective(SCPI_C commands, SCPI_P parameters, Stream& interface) {
   digitalWrite(ACTIVITY_LED_PIN, HIGH);
-  int channel_number = get_channel_number(parameters);
-  interface.println(active_value[channel_number] - dark_value[channel_number]);
+  struct SensorData sensor = sensors[get_channel_number(parameters)];
+  interface.println(sensor.active_value - sensor.dark_value);
   digitalWrite(ACTIVITY_LED_PIN, LOW);
 }
 
 void MeasureEnergy(SCPI_C commands, SCPI_P parameters, Stream& interface) {
   digitalWrite(ACTIVITY_LED_PIN, HIGH);
-  interface.println(((float) ticks[get_channel_number(parameters)]) / TURNS_PER_KWH);
+  struct SensorData sensor = sensors[get_channel_number(parameters)];
+  interface.println(((float) sensor.ticks) / TURNS_PER_KWH);
   digitalWrite(ACTIVITY_LED_PIN, LOW);
 }
 
 void MeasurePower(SCPI_C commands, SCPI_P parameters, Stream& interface) {
   digitalWrite(ACTIVITY_LED_PIN, HIGH);
-  int channel_number = get_channel_number(parameters);
-  if (ticks[channel_number] < 2)
+  struct SensorData sensor = sensors[get_channel_number(parameters)];
+  if (sensor.ticks < 2)
     interface.println(F("Invalid"));
   else {
-    interface.println(KWH_PER_TURN * 3600 / (last_tick[channel_number] - second_last_tick[channel_number]), 4);
+    interface.println(KWH_PER_TURN * 3600 / (sensor.last_tick - sensor.second_last_tick), 4);
   }
   digitalWrite(ACTIVITY_LED_PIN, LOW);
 }
 
 void MeasurePeriod(SCPI_C commands, SCPI_P parameters, Stream& interface) {
   digitalWrite(ACTIVITY_LED_PIN, HIGH);
-  int channel_number = get_channel_number(parameters);
-  if (ticks[channel_number] < 2)
+  struct SensorData sensor = sensors[get_channel_number(parameters)];
+  if (sensor.ticks < 2)
     interface.println(F("Invalid"));
   else {
-    interface.println(last_tick[channel_number] - second_last_tick[channel_number]);
+    interface.println(sensor.last_tick - sensor.second_last_tick);
   }
   digitalWrite(ACTIVITY_LED_PIN, LOW);
 }
 
 void MeasureLastTick(SCPI_C commands, SCPI_P parameters, Stream& interface) {
   digitalWrite(ACTIVITY_LED_PIN, HIGH);
-  int channel_number = get_channel_number(parameters);
-  if (ticks[channel_number] < 1)
+  struct SensorData sensor = sensors[get_channel_number(parameters)];
+  if (sensor.ticks < 1)
     interface.println(F("Invalid"));
   else
-    interface.println((millis() / 1000) - last_tick[channel_number]);
+    interface.println((millis() / 1000) - sensor.last_tick);
   digitalWrite(ACTIVITY_LED_PIN, LOW);
 }
 
-void tick(int index) {
-  ticks[index]++;
-  second_last_tick[index] = last_tick[index];
-  last_tick[index] = millis() / 1000;
+void tick(struct SensorData * sensor_data) {
+  sensor_data->ticks++;
+  sensor_data->second_last_tick = sensor_data->last_tick;
+  sensor_data->last_tick = millis() / 1000;
 }
 
 
-void calculate_everything(uint16_t active_value, uint16_t dark_value, int index) {
-  int difference = active_value - dark_value;
+void calculate_everything(struct SensorData * sensor_data) {
+  int difference = sensor_data->active_value - sensor_data->dark_value;
 
   if (difference > UPPER_THRESHOLD) {
-    high_counter[index]++;
-    if (high_counter[index] > MIN_DURATION)
-      state[index] = true;
+    sensor_data->high_counter++;
+    if (sensor_data->high_counter > MIN_DURATION)
+      sensor_data->state = true;
   }
   else {
-    high_counter[index] = 0;
+    sensor_data->high_counter = 0;
     if (difference < LOWER_THRESHOLD) {
-      low_counter[index]++;
-      if (low_counter[index] > MIN_DURATION) {
-        if (state[index])
-          tick(index);
-        state[index] = false;
+      sensor_data->low_counter++;
+      if (sensor_data->low_counter > MIN_DURATION) {
+        if (sensor_data->state)
+          tick(sensor_data);
+        sensor_data->state = false;
       }
     }
     else {
-      low_counter[index] = 0;
+      sensor_data->low_counter = 0;
     }
   }
 }
@@ -199,7 +223,7 @@ void setup() {
 
   // MEASure commands
   controller.RegisterCommand(F("MEASure:TICKs?"), &MeasureTicks);
-  controller.RegisterCommand(F("MEASure:TICKs:NUMber?"), &MeasureTicks);
+  controller.RegisterCommand(F("MEASure:TICKs:SET"), &SetTicks);
   controller.RegisterCommand(F("MEASure:SENSor:DARK?"), &MeasureDark);
   controller.RegisterCommand(F("MEASure:SENSor:ACTIve?"), &MeasureActive);
   controller.RegisterCommand(F("MEASure:SENSor:EFFEctive?"), &MeasureEffective);
@@ -208,12 +232,7 @@ void setup() {
   controller.RegisterCommand(F("CALCulate:ENERgy?"), &MeasureEnergy);
   controller.RegisterCommand(F("CALCulate:POWer?"), &MeasurePower);
 
-  for (int i=0; i < NUM_CHANNELS; i++) {
-    ticks[i] = 0;
-    high_counter[i] = 0;
-    low_counter[i] = 0;
-    state[i] = true;
-  }
+  reset();
 
   Serial.begin(9600);
   // Wait until serial connection is established
@@ -246,7 +265,7 @@ void loop()
       }
     case 1: {
       for (int i=0; i < NUM_CHANNELS; i++) {
-        active_value[i] = analogRead(IR_SENSORS[i]);   // Second step: measure active current
+        sensors[i].active_value = analogRead(IR_SENSORS[i]);  // Second step: measure active current
       }
       break;
       }
@@ -256,8 +275,8 @@ void loop()
       }
     case 3: {
       for (int i=0; i < NUM_CHANNELS; i++) {
-        dark_value[i] = analogRead(IR_SENSORS[i]);   // Fourth step: measure dark current and evaluate
-        calculate_everything(active_value[i], dark_value[i], i);
+        sensors[i].dark_value = analogRead(IR_SENSORS[i]);  // Fourth step: measure dark current and evaluate
+        calculate_everything(&sensors[i]);
       }
       break;
       }

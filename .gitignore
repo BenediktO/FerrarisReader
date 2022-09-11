@@ -131,3 +131,10 @@ dmypy.json
 
 # GCODE
 *.gcode
+
+
+# venv stuff
+bin/
+nohup.out
+pyvenv.cfg
+share/

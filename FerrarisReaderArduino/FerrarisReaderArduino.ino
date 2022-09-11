@@ -42,13 +42,21 @@ SCPI_Parser controller;
 #define TURNS_PER_KWH 75
 #define KWH_PER_TURN (1.0 / TURNS_PER_KWH)
 
+#define SAMPLINGRATE 250
+
 
 int IR_SENSORS[NUM_CHANNELS] = {A0, A1};
 int IR_LEDS = 9;  // common pin
 
 
+uint8_t counter = 0;
+uint8_t second_counter = 0;
+uint16_t livetime_counter = 0;
+uint16_t livetime_counter_buf = 0;
+
+unsigned long time;
 unsigned long last_time;
-int counter = 0;
+unsigned long last_time_seconds;
 
 
 struct SensorData
@@ -198,12 +206,6 @@ void MeasureLastTick(SCPI_C commands, SCPI_P parameters, Stream& interface) {
   digitalWrite(ACTIVITY_LED_PIN, LOW);
 }
 
-void CountChannels(SCPI_C commands, SCPI_P parameters, Stream& interface) {
-  digitalWrite(ACTIVITY_LED_PIN, HIGH);
-  interface.println(NUM_CHANNELS);
-  digitalWrite(ACTIVITY_LED_PIN, LOW);
-}
-
 // What the Fuck? Why is that not a standard library function???
 char *toLower(char *str, size_t len)
 {
@@ -250,6 +252,18 @@ void ConfGetDuration(SCPI_C commands, SCPI_P parameters, Stream& interface) {
   digitalWrite(ACTIVITY_LED_PIN, HIGH);
   struct SensorData sensor = sensors[get_channel_number(parameters)];
   interface.println(sensor.duration);
+  digitalWrite(ACTIVITY_LED_PIN, LOW);
+}
+
+void CountChannels(SCPI_C commands, SCPI_P parameters, Stream& interface) {
+  digitalWrite(ACTIVITY_LED_PIN, HIGH);
+  interface.println(NUM_CHANNELS);
+  digitalWrite(ACTIVITY_LED_PIN, LOW);
+}
+
+void GetFrequency(SCPI_C commands, SCPI_P parameters, Stream& interface) {
+  digitalWrite(ACTIVITY_LED_PIN, HIGH);
+  interface.println(livetime_counter_buf);
   digitalWrite(ACTIVITY_LED_PIN, LOW);
 }
 
@@ -313,6 +327,7 @@ void setup() {
   controller.RegisterCommand(F("CONFigure:SENSor:DURation?"), &ConfGetDuration);
 
   controller.RegisterCommand(F("SYSTem:CHANnels?"), &CountChannels);
+  controller.RegisterCommand(F("SYSTem:FREQuency?"), &GetFrequency);
 
   reset();
 
@@ -338,31 +353,34 @@ void loop()
 {
   controller.ProcessInput(Serial, "\n");
 
-  if ((millis() - last_time) > 5) {
-    last_time = millis();
+
+  time = millis();
+  if ((time - last_time) >= (500 / SAMPLINGRATE)) {
+    last_time = time;
     switch (counter) {
     case 0: {
+      for (int i=0; i < NUM_CHANNELS; i++) {
+        sensors[i].dark_value = analogRead(IR_SENSORS[i]);  // Second step: measure active current
+      }
       digitalWrite(IR_LEDS, HIGH);   // First step: switch on LEDs
       break;
       }
     case 1: {
       for (int i=0; i < NUM_CHANNELS; i++) {
-        sensors[i].active_value = analogRead(IR_SENSORS[i]);  // Second step: measure active current
+        sensors[i].active_value = analogRead(IR_SENSORS[i]);  // Fourth step: measure dark current and evaluate
+        calculate_everything(&sensors[i]);
       }
-      break;
-      }
-    case 2: {
+      livetime_counter++;
       digitalWrite(IR_LEDS, LOW);   // Thirds step: switch off LEDs
       break;
       }
-    case 3: {
-      for (int i=0; i < NUM_CHANNELS; i++) {
-        sensors[i].dark_value = analogRead(IR_SENSORS[i]);  // Fourth step: measure dark current and evaluate
-        calculate_everything(&sensors[i]);
-      }
-      break;
-      }
     }
-    counter = (counter + 1) & 3;
+    counter = (counter + 1) & 1;
+  }
+
+  if ((time - last_time_seconds) >= 1000) {
+    last_time_seconds = time;
+    livetime_counter_buf = livetime_counter;
+    livetime_counter = 0;
   }
 }

@@ -1,22 +1,30 @@
+
+'''
+Script used to plot data of CSV files.
+'''
+
 import argparse
+import datetime
+
+
 import matplotlib.pyplot as plt
 import matplotlib.dates
-
 
 import numpy as np
 
 
-import datetime
+TIME0 = datetime.time(0, 0)
+DATE0 = datetime.datetime.fromtimestamp(0)
 
 
 def to_datetime(values):
     return np.array([datetime.datetime.fromtimestamp(value) for value in values])
 
 def to_date(values):
-    return np.array([datetime.datetime.combine(datetime.datetime.fromtimestamp(value).date(), datetime.time(0, 0)) for value in values])
+    return np.array([datetime.datetime.combine(datetime.datetime.fromtimestamp(value).date(), TIME0) for value in values])
 
 def to_time(values):
-    return np.array([datetime.datetime.combine(datetime.datetime.fromtimestamp(0), datetime.datetime.fromtimestamp(value).time()) for value in values])
+    return np.array([datetime.datetime.combine(DATE0, datetime.datetime.fromtimestamp(value).time()) for value in values])
 
 
 CONVERTERS = {
@@ -61,7 +69,6 @@ parser.add_argument('--ylabel', type=str, default=None)
 parser.add_argument('--xconvert', choices=list(CONVERTERS.keys()), default=None)
 parser.add_argument('--yconvert', choices=list(CONVERTERS.keys()), default=None)
 parser.add_argument('--xfilter', choices=list(FILTERS.keys()), default=None)
-#parser.add_argument('--yfilter', choices=[], default=None)
 parser.add_argument('--save', type=str, default=None)
 args = parser.parse_args()
 

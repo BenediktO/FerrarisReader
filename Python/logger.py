@@ -29,7 +29,8 @@ parser.add_argument('--channels', default=2, type=int,
 parser.add_argument('--quantities', nargs='+', choices=list(CHOICES.keys()),
                     default=['turns', 'effective', 'energy', 'power'],
                     help='quantities that will be read from each channel')
-parser.add_argument('--log', default=None, type=str, help='filename to write to')
+parser.add_argument('--log', default=None, type=str,
+                    help='filename to write to, the format is compatible to a CSV without header')
 parser.add_argument('--quiet', action='store_true',
                     help='If set, no output will be generated')
 args = parser.parse_args()
@@ -44,7 +45,7 @@ device = serial.Serial(port=args.device)
 
 
 if args.log:
-    logfile = open(args.log, 'w')
+    logfile = open(args.log, 'a')
 
 try:
     while True:
